@@ -23,4 +23,9 @@ fn handle_connection(mut stream: TcpStream) {
         .collect();
 
     println!("Request: {http_request:#?}");
+
+    // Now to respond with 200 OK.
+    let response = "HTTP/1.1 OK\r\n\r\n";
+
+    stream.write_all(response.as_bytes()).unwrap();
 }
