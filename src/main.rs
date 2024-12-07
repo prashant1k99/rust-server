@@ -15,13 +15,6 @@ fn main() {
     for stream in listener.incoming() {
         let stream = stream.unwrap();
 
-        // To setup multi-threaded server:
-        // This is not optimal as we are spinning new thread every time a request comes in.
-        // thread::spawn(|| {
-        //     handle_connection(stream);
-        // });
-
-        // To solve that issue we will create a thread pool to handle requests
         pool.execute(|| handle_connection(stream));
     }
 }

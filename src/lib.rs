@@ -44,8 +44,6 @@ impl ThreadPool {
 }
 
 impl Drop for ThreadPool {
-    // So for dropping we need to drop the sender first and then wait for the thread to
-    // finish tasks
     fn drop(&mut self) {
         drop(self.sender.take());
         for worker in &mut self.workers {
@@ -73,7 +71,7 @@ impl Worker {
                     println!("Worker {id} got a job. Executing");
                     job();
                 }
-                Err(e) => {
+                Err(_) => {
                     println!("Worker {id} disconnected. Shutting down");
                     break;
                 }
