@@ -3,7 +3,7 @@ use std::thread;
 
 pub struct ThreadPool {
     workers: Vec<Worker>,
-    sender: mpsc::Sender<Job>,
+    sender: Option<mpsc::Sender<Job>>,
 }
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
@@ -27,7 +27,10 @@ impl ThreadPool {
             workers.push(Worker::new(id, Arc::clone(&receiver)));
         }
 
-        ThreadPool { workers, sender }
+        ThreadPool {
+            workers,
+            sender: Some(sender),
+        }
     }
 
     pub fn execute<F>(&self, f: F)
@@ -36,12 +39,15 @@ impl ThreadPool {
     {
         let job = Box::new(f);
 
-        self.sender.send(job).unwrap();
+        self.sender.as_ref().unwrap().send(job).unwrap();
     }
 }
 
 impl Drop for ThreadPool {
+    // So for dropping we need to drop the sender first and then wait for the thread to
+    // finish tasks
     fn drop(&mut self) {
+        drop(self.sender.take());
         for worker in &mut self.workers {
             println!("Shuting down worker: {}", worker.id);
 
@@ -58,14 +64,19 @@ pub struct Worker {
 }
 
 impl Worker {
-    // This actually is not the threading behaviour we wanted as this could potentially lead to
-    // slow server as if there is a single slow query, then the Mutex is held by that query, until
-    // the execution is not finished, so in the mean time no other thread can pick up the task
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
-        let thread = thread::spawn(move || {
-            while let Ok(job) = receiver.lock().unwrap().recv() {
-                println!("Worker {id} got a job. Executing");
-                job();
+        let thread = thread::spawn(move || loop {
+            let job = receiver.lock().unwrap().recv();
+
+            match job {
+                Ok(job) => {
+                    println!("Worker {id} got a job. Executing");
+                    job();
+                }
+                Err(e) => {
+                    println!("Worker {id} disconnected. Shutting down");
+                    break;
+                }
             }
         });
 
