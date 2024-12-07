@@ -46,13 +46,15 @@ pub struct Worker {
 }
 
 impl Worker {
+    // This actually is not the threading behaviour we wanted as this could potentially lead to
+    // slow server as if there is a single slow query, then the Mutex is held by that query, until
+    // the execution is not finished, so in the mean time no other thread can pick up the task
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
-        let thread = thread::spawn(move || loop {
-            let job = receiver.lock().unwrap().recv().unwrap();
-
-            println!("Worker {id} got a job. Executing");
-
-            job();
+        let thread = thread::spawn(move || {
+            while let Ok(job) = receiver.lock().unwrap().recv() {
+                println!("Worker {id} got a job. Executing");
+                job();
+            }
         });
 
         Worker { id, thread }
